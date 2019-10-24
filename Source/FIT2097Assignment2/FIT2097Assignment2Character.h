@@ -4,14 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/TimelineComponent.h"
 #include "FIT2097Assignment2Character.generated.h"
+
 
 class UInputComponent;
 
 UCLASS(config=Game)
 class AFIT2097Assignment2Character : public ACharacter
 {
-	GENERATED_BODY()
+	 GENERATED_BODY()
 
 	/** Pawn mesh: 1st person view (arms; seen only by self) */
 	UPROPERTY(VisibleDefaultsOnly, Category=Mesh)
@@ -45,11 +48,14 @@ class AFIT2097Assignment2Character : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UMotionControllerComponent* L_MotionController;
 
+
 public:
 	AFIT2097Assignment2Character();
 
 protected:
 	virtual void BeginPlay();
+
+	virtual void Tick(float DeltaTime) override;
 
 public:
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
@@ -80,6 +86,111 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	uint32 bUsingMotionControllers : 1;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+		float Health;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+		float CurrentHealth;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+		float HealthPrecentage;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+		FString Dead;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina")
+		float Stamina;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina")
+		float CurrentStamina;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina")
+		float StaminaPrecentage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Joy ")
+		float Joy;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Joy ")
+		float CurrentJoy;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Joy ")
+		float JoyPrecentage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CharacterMovement ")
+		float Speed;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CharacterMovement ")
+		float CurrentSpeed;
+
+	//UFUNCTION(BlueprintPure, Category = "CharacterMovement ")
+	//	float GetSpeed();
+	//UFUNCTION(BlueprintPure, Category = "CharacterMovement ")
+	//	void UpdateSpeed();
+	
+	UFUNCTION(BlueprintPure, Category = "Health")
+		float GetHealth();
+
+	UFUNCTION(BlueprintPure, Category = "Health")
+		FText GetHealthIntText();
+
+	UFUNCTION(BlueprintCallable, Category = "Health")
+		void UpdateHealth(float Healthadd);
+
+	UFUNCTION(BlueprintCallable, Category = "Health")
+		void CheckIsDead();
+
+	UFUNCTION(BlueprintPure, Category = "Stamina")
+		float GetStamina();
+
+	//UFUNCTION(BlueprintPure, Category = "Stamina")
+	///	FText GetStaminaIntText();
+
+	UFUNCTION(BlueprintCallable, Category = "Stamina")
+		void UpdateStamina(float Staminaadd);
+
+	UFUNCTION(BlueprintPure, Category = "Joy")
+		float GetJoy();
+
+	//UFUNCTION(BlueprintPure, Category = "Joy")
+	//	FText GetJoyIntText();
+
+	UFUNCTION(BlueprintCallable, Category = "Joy")
+		void UpdateJoy(float Joyadd);
+
+
+	UFUNCTION()
+		void GetPosionDamage();
+	UFUNCTION()
+		void GetJoyDamage();
+	UFUNCTION()
+		void GetStaminaDamage();
+
+	FTimerHandle HealthDamageTimerHandle;
+	FTimerHandle JoyDamageTimerHandle;
+	FTimerHandle StaminaDamageTimerHandle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item ")
+	FString ItemName;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item ")
+	FString PickUpNotice;
+
+	bool IsPickUp;
+
+	UFUNCTION(BlueprintCallable, Category = "Item")
+		FString GetItemName();
+	UFUNCTION(BlueprintCallable, Category = "Item")
+		FString GetPickUpText();
+	
+	UPROPERTY(EditAnywhere, Category = "Health")
+		class AHealthPack* healthpack;
+
+	UPROPERTY(EditAnywhere, Category = "Food")
+		class AFoodPack* foodpack;
+
+	UPROPERTY(EditAnywhere, Category = "Super")
+		class ASuperPack* superpack;
+
+	UPROPERTY(EditAnywhere, Category = "Speed")
+		class ASpeedPickUp* speedpack;
+
+
+	UFUNCTION(BlueprintPure)
+		FString MyRole();
+
+	void PerformRayTrace();
+
 protected:
 	
 	/** Fires a projectile. */
@@ -93,6 +204,9 @@ protected:
 
 	/** Handles stafing movement, left and right */
 	void MoveRight(float Val);
+
+	//Pick Up Action
+	void PickUp();
 
 	/**
 	 * Called via input to turn at a given rate.
@@ -138,8 +252,7 @@ public:
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
-	UFUNCTION(BlueprintPure)
-		FString MyRole();
+private:
+
 
 };
-

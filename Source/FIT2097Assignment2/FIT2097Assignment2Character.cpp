@@ -9,8 +9,15 @@
 #include "GameFramework/InputSettings.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine.h"
 #include "MotionControllerComponent.h"
 #include "XRMotionControllerBase.h" // for FXRMotionControllerBase::RightHandSourceId
+#include "TimerManager.h"
+#include "DrawDebugHelpers.h"
+#include "HealthPack.h"
+#include "FoodPack.h"
+#include "SuperPack.h"
+#include "SpeedPickUp.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -89,6 +96,24 @@ void AFIT2097Assignment2Character::BeginPlay()
 	// Call the base class  
 	Super::BeginPlay();
 
+	Health = 50.0f;
+	CurrentHealth = Health;
+	HealthPrecentage = 1.0f;
+	bCanBeDamaged = true;
+
+	Stamina = 50.0f;
+	CurrentStamina = Stamina;
+	StaminaPrecentage = 1.0f;
+
+	Joy = 50.0f;
+	CurrentJoy = Joy;
+	JoyPrecentage = 1.0f;
+
+	IsPickUp = false;
+	ItemName = NULL;
+	PickUpNotice = NULL;
+	Dead = NULL;
+
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	FP_Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
 
@@ -103,7 +128,11 @@ void AFIT2097Assignment2Character::BeginPlay()
 		VR_Gun->SetHiddenInGame(true, true);
 		Mesh1P->SetHiddenInGame(false, true);
 	}
+
+	GetWorldTimerManager().SetTimer(HealthDamageTimerHandle, this, &AFIT2097Assignment2Character::GetPosionDamage, 5.0f, true);
+	GetWorldTimerManager().SetTimer(JoyDamageTimerHandle, this, &AFIT2097Assignment2Character::GetJoyDamage, 10.0f, true);
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 // Input
@@ -119,6 +148,9 @@ void AFIT2097Assignment2Character::SetupPlayerInputComponent(class UInputCompone
 
 	// Bind fire event
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AFIT2097Assignment2Character::OnFire);
+	
+	//Pick up event
+	PlayerInputComponent->BindAction("PickUp", IE_Pressed, this, &AFIT2097Assignment2Character::PickUp);
 
 	// Enable touchscreen input
 	EnableTouchscreenMovement(PlayerInputComponent);
@@ -140,7 +172,10 @@ void AFIT2097Assignment2Character::SetupPlayerInputComponent(class UInputCompone
 
 void AFIT2097Assignment2Character::OnFire()
 {
+	//PerformRayTrace();
+
 	// try and fire a projectile
+	/*
 	if (ProjectileClass != NULL)
 	{
 		UWorld* const World = GetWorld();
@@ -167,6 +202,8 @@ void AFIT2097Assignment2Character::OnFire()
 			}
 		}
 	}
+	*/
+
 
 	// try and play the sound if specified
 	if (FireSound != NULL)
@@ -184,6 +221,7 @@ void AFIT2097Assignment2Character::OnFire()
 			AnimInstance->Montage_Play(FireAnimation, 1.f);
 		}
 	}
+
 }
 
 void AFIT2097Assignment2Character::OnResetVR()
@@ -197,6 +235,7 @@ void AFIT2097Assignment2Character::BeginTouch(const ETouchIndex::Type FingerInde
 	{
 		return;
 	}
+
 	if ((FingerIndex == TouchItem.FingerIndex) && (TouchItem.bMoved == false))
 	{
 		OnFire();
@@ -260,6 +299,7 @@ void AFIT2097Assignment2Character::MoveForward(float Value)
 	{
 		// add movement in that direction
 		AddMovementInput(GetActorForwardVector(), Value);
+		GetStaminaDamage();
 	}
 }
 
@@ -269,6 +309,7 @@ void AFIT2097Assignment2Character::MoveRight(float Value)
 	{
 		// add movement in that direction
 		AddMovementInput(GetActorRightVector(), Value);
+		GetStaminaDamage();
 	}
 }
 
@@ -294,9 +335,65 @@ bool AFIT2097Assignment2Character::EnableTouchscreenMovement(class UInputCompone
 		//Commenting this out to be more consistent with FPS BP template.
 		//PlayerInputComponent->BindTouch(EInputEvent::IE_Repeat, this, &AFIT2097Assignment2Character::TouchUpdate);
 		return true;
+
 	}
 	
 	return false;
+}
+
+void AFIT2097Assignment2Character::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	FHitResult OutHit;
+
+	FVector Start = FP_Gun->GetComponentLocation();
+	FVector ForwardVector = FirstPersonCameraComponent->GetForwardVector();
+	FVector End = (Start + (ForwardVector* 1000.0f));
+
+	FCollisionQueryParams CollisionParams;
+
+	DrawDebugLine(GetWorld(), Start, End, FColor::Green, false, 1, 0, 1);
+
+	bool isHit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
+
+	if (isHit)
+	{
+		if (OutHit.bBlockingHit)
+		{
+
+			//GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString::Printf(TEXT("You are hitting: %s"), *OutHit.GetActor()->GetName()));	
+			if (OutHit.GetActor()->GetClass()->IsChildOf(AHealthPack::StaticClass()))
+			{
+				PickUpNotice = "Press E to pick up";
+				ItemName = "HealthPack";
+			}
+			else if (OutHit.GetActor()->GetClass()->IsChildOf(AFoodPack::StaticClass()))
+			{	
+				PickUpNotice = "Press E to pick up";
+				ItemName = "FoodPack";
+			}
+
+			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASuperPack::StaticClass()))
+			{
+				PickUpNotice = "Press E to pick up";
+				ItemName = "SuperPack";
+			}
+
+			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASpeedPickUp::StaticClass()))
+			{
+				PickUpNotice = "Press E to pick up";
+				ItemName = "SpeedPack";
+			}
+		}
+	}
+	else
+	{
+		PickUpNotice = NULL;
+		ItemName = NULL;
+	}
+
+
 }
 
 FString AFIT2097Assignment2Character::MyRole()
@@ -308,5 +405,186 @@ FString AFIT2097Assignment2Character::MyRole()
 	else
 	{
 		return TEXT("Client");
+	}
+}
+
+float AFIT2097Assignment2Character::GetHealth()
+{
+	//HealthPrecentage = CurrentHealth / 100.0f;
+	return HealthPrecentage;
+}
+
+float AFIT2097Assignment2Character::GetStamina()
+{
+	//StaminaPrecentage = CurrentStamina / 100.0f;
+	return StaminaPrecentage;
+}
+
+float AFIT2097Assignment2Character::GetJoy()
+{
+	//JoyPrecentage = CurrentJoy / 100.0f;
+	return JoyPrecentage;
+}
+
+void AFIT2097Assignment2Character::UpdateHealth(float Healthadd)
+{
+
+	CurrentHealth = FMath::Clamp(CurrentHealth += Healthadd, 0.0f, 100.0f);
+	HealthPrecentage = CurrentHealth / 100.0f;
+}
+
+void AFIT2097Assignment2Character::UpdateStamina(float Staminaadd)
+{
+
+	CurrentStamina = FMath::Clamp(CurrentStamina += Staminaadd, 0.0f, 100.0f);
+	StaminaPrecentage = CurrentStamina / 100.0f;
+}
+
+void AFIT2097Assignment2Character::UpdateJoy(float Joyadd)
+{
+
+	CurrentJoy = FMath::Clamp(CurrentJoy += Joyadd, 0.0f, 100.0f);
+	JoyPrecentage = CurrentJoy / 100.0f;
+}
+
+/*
+void AFIT2097Assignment2Character::UpdateSpeed()
+{
+	if(CurrentStamina == 0)
+	{
+		CurrentSpeed = Speed * 0.8f;
+	}
+	else if(CurrentJoy ==0)
+	{
+		CurrentSpeed = Speed * 0.2f;
+	}
+}
+
+float AFIT2097Assignment2Character::GetSpeed()
+{
+	return CurrentSpeed;
+}*/
+
+FText AFIT2097Assignment2Character::GetHealthIntText()
+{
+	int32 HP = FMath::RoundHalfFromZero(HealthPrecentage * 100);
+	FString HPS = FString::FromInt(HP);
+	FString HealthHUD = HPS + FString(TEXT("%"));
+	FText HPText = FText::FromString(HealthHUD);
+	return HPText;
+}
+
+void AFIT2097Assignment2Character::GetPosionDamage()
+{
+	UpdateHealth(-1.0f);
+
+}
+
+void AFIT2097Assignment2Character::GetJoyDamage()
+{
+	UpdateJoy(-1.0f);
+}
+
+void AFIT2097Assignment2Character::GetStaminaDamage()
+{
+	UpdateStamina(-0.01f);
+}
+
+void AFIT2097Assignment2Character::PickUp()
+{
+	PerformRayTrace();
+}
+
+FString AFIT2097Assignment2Character::GetItemName()
+{
+
+	return ItemName;
+}
+
+FString AFIT2097Assignment2Character::GetPickUpText()
+{
+
+	return PickUpNotice;
+}
+
+
+
+void AFIT2097Assignment2Character::PerformRayTrace()
+{
+
+	FHitResult OutHit;
+
+	FVector Start = FP_Gun->GetComponentLocation();
+	FVector ForwardVector = FirstPersonCameraComponent->GetForwardVector();
+	FVector End = (Start + (ForwardVector* 1000.0f));
+
+	FCollisionQueryParams CollisionParams;
+
+	DrawDebugLine(GetWorld(), Start, End, FColor::Green, false, 1, 0, 1);
+
+	bool isHit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
+
+	if (isHit)
+	{
+		if (OutHit.bBlockingHit)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString::Printf(TEXT("You are hitting: %s"), *OutHit.GetActor()->GetName()));
+			if (OutHit.GetActor()->GetClass()->IsChildOf(AHealthPack::StaticClass()))
+			{
+				
+				healthpack = Cast<AHealthPack>(OutHit.GetActor());
+
+				IsPickUp = true;
+				UpdateHealth(20.0f);
+				UpdateJoy(20.0f);
+				healthpack->Destroy();
+			}
+
+			else if(OutHit.GetActor()->GetClass()->IsChildOf(AFoodPack::StaticClass()))
+			{
+				foodpack = Cast<AFoodPack>(OutHit.GetActor());
+				
+				
+				UpdateStamina(20.0f);
+				UpdateJoy(20.0f);
+				foodpack->Destroy();
+			}
+
+			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASuperPack::StaticClass()))
+			{
+				superpack = Cast<ASuperPack>(OutHit.GetActor());
+				UpdateStamina(50.0f);
+				UpdateJoy(50.0f);
+				UpdateHealth(50.0f);
+				superpack->Destroy();
+			}
+
+			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASpeedPickUp::StaticClass()))
+			{
+				speedpack = Cast<ASpeedPickUp>(OutHit.GetActor());
+				speedpack->Destroy();
+			}
+		}
+	}
+	else
+	{
+		healthpack = NULL;
+		foodpack = NULL;
+		superpack = NULL;
+		ItemName = NULL;
+		PickUpNotice = NULL;
+	}
+}
+
+
+void AFIT2097Assignment2Character::CheckIsDead()
+{
+	if(CurrentHealth == 0)
+	{
+		Dead = "You Dead !!!";
+	}
+	else
+	{
+		Dead = NULL;
 	}
 }
