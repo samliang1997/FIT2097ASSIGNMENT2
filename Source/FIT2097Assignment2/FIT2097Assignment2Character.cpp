@@ -18,11 +18,24 @@
 #include "FoodPack.h"
 #include "SuperPack.h"
 #include "SpeedPickUp.h"
+#include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
 //////////////////////////////////////////////////////////////////////////
 // AFIT2097Assignment2Character
+
+
+void AFIT2097Assignment2Character::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AFIT2097Assignment2Character, healthpack);
+	DOREPLIFETIME(AFIT2097Assignment2Character, foodpack);
+	DOREPLIFETIME(AFIT2097Assignment2Character, superpack);
+	DOREPLIFETIME(AFIT2097Assignment2Character, speedpack);
+
+}
+
 
 AFIT2097Assignment2Character::AFIT2097Assignment2Character()
 {
@@ -109,10 +122,15 @@ void AFIT2097Assignment2Character::BeginPlay()
 	CurrentJoy = Joy;
 	JoyPrecentage = 1.0f;
 
-	IsPickUp = false;
+	BaseSpeed = 800.0f;
+	CurrentSpeed = BaseSpeed;
+	GetCharacterMovement()->MaxWalkSpeed = BaseSpeed;
+
+	CanBeDamage = false;
 	ItemName = NULL;
 	PickUpNotice = NULL;
 	Dead = NULL;
+	isTrace = false;
 
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	FP_Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
@@ -130,7 +148,7 @@ void AFIT2097Assignment2Character::BeginPlay()
 	}
 
 	GetWorldTimerManager().SetTimer(HealthDamageTimerHandle, this, &AFIT2097Assignment2Character::GetPosionDamage, 5.0f, true);
-	GetWorldTimerManager().SetTimer(JoyDamageTimerHandle, this, &AFIT2097Assignment2Character::GetJoyDamage, 10.0f, true);
+	GetWorldTimerManager().SetTimer(JoyDamageTimerHandle, this, &AFIT2097Assignment2Character::GetJoyDamage, 8.0f, true);
 }
 
 
@@ -299,7 +317,9 @@ void AFIT2097Assignment2Character::MoveForward(float Value)
 	{
 		// add movement in that direction
 		AddMovementInput(GetActorForwardVector(), Value);
+		CanBeDamage = true;
 		GetStaminaDamage();
+		
 	}
 }
 
@@ -309,7 +329,9 @@ void AFIT2097Assignment2Character::MoveRight(float Value)
 	{
 		// add movement in that direction
 		AddMovementInput(GetActorRightVector(), Value);
+		CanBeDamage = true;
 		GetStaminaDamage();
+		
 	}
 }
 
@@ -367,23 +389,28 @@ void AFIT2097Assignment2Character::Tick(float DeltaTime)
 			{
 				PickUpNotice = "Press E to pick up";
 				ItemName = "HealthPack";
+				isTrace = true;
 			}
 			else if (OutHit.GetActor()->GetClass()->IsChildOf(AFoodPack::StaticClass()))
 			{	
 				PickUpNotice = "Press E to pick up";
 				ItemName = "FoodPack";
+				isTrace = true;
 			}
 
 			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASuperPack::StaticClass()))
 			{
 				PickUpNotice = "Press E to pick up";
 				ItemName = "SuperPack";
+				isTrace = true;
 			}
+
 
 			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASpeedPickUp::StaticClass()))
 			{
 				PickUpNotice = "Press E to pick up";
 				ItemName = "SpeedPack";
+				isTrace = true;
 			}
 		}
 	}
@@ -391,6 +418,7 @@ void AFIT2097Assignment2Character::Tick(float DeltaTime)
 	{
 		PickUpNotice = NULL;
 		ItemName = NULL;
+		isTrace = false;
 	}
 
 
@@ -447,23 +475,23 @@ void AFIT2097Assignment2Character::UpdateJoy(float Joyadd)
 	JoyPrecentage = CurrentJoy / 100.0f;
 }
 
-/*
-void AFIT2097Assignment2Character::UpdateSpeed()
+void AFIT2097Assignment2Character::IncreaseSpeed()
 {
-	if(CurrentStamina == 0)
+	if (Role == ROLE_Authority)
 	{
-		CurrentSpeed = Speed * 0.8f;
+		GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * 10.0f;
 	}
-	else if(CurrentJoy ==0)
+	else
 	{
-		CurrentSpeed = Speed * 0.2f;
+		GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * 10.0f;
 	}
 }
+
 
 float AFIT2097Assignment2Character::GetSpeed()
 {
 	return CurrentSpeed;
-}*/
+}
 
 FText AFIT2097Assignment2Character::GetHealthIntText()
 {
@@ -474,25 +502,70 @@ FText AFIT2097Assignment2Character::GetHealthIntText()
 	return HPText;
 }
 
+
 void AFIT2097Assignment2Character::GetPosionDamage()
 {
-	UpdateHealth(-1.0f);
-
+	
+	if (CurrentHealth <= 0.0f)
+		{
+			CheckIsDead();
+		}
+		else
+		{
+			UpdateHealth(-1.0f);
+		}
+		CheckIsDead();
 }
 
 void AFIT2097Assignment2Character::GetJoyDamage()
 {
-	UpdateJoy(-1.0f);
+
+	if (CurrentJoy <= 0.0f)
+		{
+			if (CurrentJoy == 0.0f)
+			{
+				GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * 0.8f;
+			}
+		}
+		else
+		{
+			GetCharacterMovement()->MaxWalkSpeed = BaseSpeed;
+			UpdateJoy(-2.0f);
+		}
+	
 }
 
 void AFIT2097Assignment2Character::GetStaminaDamage()
 {
-	UpdateStamina(-0.01f);
+	
+	if (CurrentStamina <= 0.0f)
+		{
+			if (CurrentStamina == 0.0f)
+			{
+
+				GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * 0.2f;
+			}
+		}
+		else if (CanBeDamage == true)
+		{
+			GetCharacterMovement()->MaxWalkSpeed = BaseSpeed;
+			UpdateStamina(-0.01f);
+			CanBeDamage = false;
+		}
+	
 }
 
 void AFIT2097Assignment2Character::PickUp()
 {
-	PerformRayTrace();
+	if (Role == ROLE_Authority)
+	{
+		PerformRayTrace();
+	}
+	else
+	{
+		PerformRayTrace();
+	}
+	
 }
 
 FString AFIT2097Assignment2Character::GetItemName()
@@ -506,7 +579,6 @@ FString AFIT2097Assignment2Character::GetPickUpText()
 
 	return PickUpNotice;
 }
-
 
 
 void AFIT2097Assignment2Character::PerformRayTrace()
@@ -525,66 +597,79 @@ void AFIT2097Assignment2Character::PerformRayTrace()
 	bool isHit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
 
 	if (isHit)
-	{
-		if (OutHit.bBlockingHit)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString::Printf(TEXT("You are hitting: %s"), *OutHit.GetActor()->GetName()));
-			if (OutHit.GetActor()->GetClass()->IsChildOf(AHealthPack::StaticClass()))
+			if (OutHit.bBlockingHit)
 			{
-				
-				healthpack = Cast<AHealthPack>(OutHit.GetActor());
+				GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString::Printf(TEXT("You are hitting: %s"), *OutHit.GetActor()->GetName()));
+				if (OutHit.GetActor()->GetClass()->IsChildOf(AHealthPack::StaticClass()))
+				{
+					healthpack = Cast<AHealthPack>(OutHit.GetActor());
+					UpdateHealth(20.0f);
+					UpdateJoy(20.0f);
+					healthpack->Destroy();
+				}
 
-				IsPickUp = true;
-				UpdateHealth(20.0f);
-				UpdateJoy(20.0f);
-				healthpack->Destroy();
-			}
+				else if (OutHit.GetActor()->GetClass()->IsChildOf(AFoodPack::StaticClass()))
+				{
+					foodpack = Cast<AFoodPack>(OutHit.GetActor());
+					UpdateStamina(20.0f);
+					UpdateJoy(20.0f);
+					foodpack->Destroy();
+				}
 
-			else if(OutHit.GetActor()->GetClass()->IsChildOf(AFoodPack::StaticClass()))
-			{
-				foodpack = Cast<AFoodPack>(OutHit.GetActor());
-				
-				
-				UpdateStamina(20.0f);
-				UpdateJoy(20.0f);
-				foodpack->Destroy();
-			}
+				else if (OutHit.GetActor()->GetClass()->IsChildOf(ASuperPack::StaticClass()))
+				{
+					superpack = Cast<ASuperPack>(OutHit.GetActor());
+					UpdateStamina(50.0f);
+					UpdateJoy(50.0f);
+					UpdateHealth(50.0f);
+					superpack->Destroy();
+				}
 
-			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASuperPack::StaticClass()))
-			{
-				superpack = Cast<ASuperPack>(OutHit.GetActor());
-				UpdateStamina(50.0f);
-				UpdateJoy(50.0f);
-				UpdateHealth(50.0f);
-				superpack->Destroy();
-			}
-
-			else if (OutHit.GetActor()->GetClass()->IsChildOf(ASpeedPickUp::StaticClass()))
-			{
-				speedpack = Cast<ASpeedPickUp>(OutHit.GetActor());
-				speedpack->Destroy();
+				else if (OutHit.GetActor()->GetClass()->IsChildOf(ASpeedPickUp::StaticClass()))
+				{
+					speedpack = Cast<ASpeedPickUp>(OutHit.GetActor());
+					GetWorldTimerManager().SetTimer(SpeedIncreaseTimerHandle, this, &AFIT2097Assignment2Character::IncreaseSpeed, 30.0f, false);
+					speedpack->Destroy();
+				}
 			}
 		}
-	}
-	else
-	{
-		healthpack = NULL;
-		foodpack = NULL;
-		superpack = NULL;
-		ItemName = NULL;
-		PickUpNotice = NULL;
-	}
+		else
+		{
+			healthpack = NULL;
+			foodpack = NULL;
+			superpack = NULL;
+			speedpack = NULL;
+		}
+	
+	
+
+
 }
 
 
 void AFIT2097Assignment2Character::CheckIsDead()
 {
-	if(CurrentHealth == 0)
+	if (Role == ROLE_Authority) 
 	{
-		Dead = "You Dead !!!";
+		if (CurrentHealth == 0)
+		{
+			Dead = "You Dead !!!";
+		}
+		else
+		{
+			Dead = NULL;
+		}
 	}
 	else
 	{
-		Dead = NULL;
+		if (CurrentHealth == 0)
+		{
+			Dead = "You Dead !!!";
+		}
+		else
+		{
+			Dead = NULL;
+		}
 	}
 }

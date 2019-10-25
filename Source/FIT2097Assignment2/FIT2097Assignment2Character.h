@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TimelineComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "FIT2097Assignment2Character.generated.h"
 
 
@@ -110,14 +111,12 @@ public:
 		float JoyPrecentage;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CharacterMovement ")
-		float Speed;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CharacterMovement ")
 		float CurrentSpeed;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CharacterMovement ")
+		float BaseSpeed;
 
-	//UFUNCTION(BlueprintPure, Category = "CharacterMovement ")
-	//	float GetSpeed();
-	//UFUNCTION(BlueprintPure, Category = "CharacterMovement ")
-	//	void UpdateSpeed();
+	UFUNCTION(BlueprintPure, Category = "CharacterMovement ")
+		float GetSpeed();
 	
 	UFUNCTION(BlueprintPure, Category = "Health")
 		float GetHealth();
@@ -156,40 +155,53 @@ public:
 		void GetJoyDamage();
 	UFUNCTION()
 		void GetStaminaDamage();
+	UFUNCTION()
+		void IncreaseSpeed();
 
 	FTimerHandle HealthDamageTimerHandle;
 	FTimerHandle JoyDamageTimerHandle;
 	FTimerHandle StaminaDamageTimerHandle;
+	FTimerHandle SpeedIncreaseTimerHandle;
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item ")
 	FString ItemName;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item ")
 	FString PickUpNotice;
 
-	bool IsPickUp;
+	bool CanBeDamage;
 
 	UFUNCTION(BlueprintCallable, Category = "Item")
 		FString GetItemName();
 	UFUNCTION(BlueprintCallable, Category = "Item")
 		FString GetPickUpText();
 	
-	UPROPERTY(EditAnywhere, Category = "Health")
+	UPROPERTY(EditAnywhere, Category = "Health", Replicated)
 		class AHealthPack* healthpack;
 
-	UPROPERTY(EditAnywhere, Category = "Food")
+	UPROPERTY(EditAnywhere, Category = "Food", Replicated)
 		class AFoodPack* foodpack;
 
-	UPROPERTY(EditAnywhere, Category = "Super")
+	UPROPERTY(EditAnywhere, Category = "Super", Replicated)
 		class ASuperPack* superpack;
 
-	UPROPERTY(EditAnywhere, Category = "Speed")
+	UPROPERTY(EditAnywhere, Category = "Speed", Replicated)
 		class ASpeedPickUp* speedpack;
 
 
 	UFUNCTION(BlueprintPure)
 		FString MyRole();
 
+	//UFUNCTION(Server, Reliable, WithValidation)
 	void PerformRayTrace();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item ")
+	bool isTrace;
+	
+
+	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&OutLifetimeProps) const;
+
+
 
 protected:
 	
@@ -206,6 +218,7 @@ protected:
 	void MoveRight(float Val);
 
 	//Pick Up Action
+	//UFUNCTION(Server, Reliable, WithValidation)
 	void PickUp();
 
 	/**
